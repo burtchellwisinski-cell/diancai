@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>回家点菜</title>
 <link rel="manifest" href="manifest.json">
@@ -519,7 +520,13 @@ function finishInit() {
   }
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.update();
+    });
+    // 清除旧缓存
+    if (typeof caches !== 'undefined') {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+    }
   }
 }
 
