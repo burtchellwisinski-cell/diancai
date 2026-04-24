@@ -523,14 +523,18 @@ function finishInit() {
     renderBottom();
   }
 
+  // 每次进入先清空旧 SW 和缓存，确保拿到最新版本
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').then(reg => {
-      reg.update();
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
     });
-    // 清除旧缓存
     if (typeof caches !== 'undefined') {
       caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
     }
+    // 延迟注册新 SW，防止卡旧版本
+    setTimeout(() => {
+      navigator.serviceWorker.register('sw.js');
+    }, 500);
   }
 }
 

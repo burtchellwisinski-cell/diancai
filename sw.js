@@ -1,4 +1,4 @@
-const CACHE = 'diancai-v2';
+const CACHE = 'diancai-v3';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
