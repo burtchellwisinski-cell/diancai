@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>回家点菜 🍳</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: linear-gradient(135deg, #fff5f0 0%, #fff0e5 100%);
+  min-height: 100vh;
+  padding-bottom: 100px;
+  color: #3d2c1e;
+}
+
+/* ====== Header ====== */
+.header {
+  background: linear-gradient(135deg, #e8452d, #f05a3e);
+  color: white; text-align: center;
+  padding: 28px 20px 22px;
+  border-radius: 0 0 28px 28px;
+  box-shadow: 0 4px 20px rgba(232,69,45,0.25);
+  position: relative;
+}
+.header h1 { font-size: 26px; font-weight: 700; letter-spacing: 2px; }
+.header .subtitle { font-size: 13px; opacity: 0.9; margin-top: 4px; }
+
+/* ====== Role switch ====== */
+.role-bar { display: flex; justify-content: center; gap: 12px; padding: 14px 16px 0; }
+.role-btn {
+  padding: 10px 28px; border-radius: 22px; border: 2px solid #e8d5c8;
+  background: white; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; user-select: none;
+}
+.role-btn.active { background: #e8452d; color: white; border-color: #e8452d; }
+
+/* ====== Tabs ====== */
+.tabs {
+  display: flex; gap: 8px; padding: 12px 16px 0;
+  overflow-x: auto; scrollbar-width: none; flex-shrink: 0;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex-shrink: 0; padding: 8px 18px; border-radius: 20px;
+  border: 1.5px solid #e8d5c8; background: white;
+  color: #8b6f5e; font-size: 14px; cursor: pointer;
+  transition: all 0.2s; white-space: nowrap; user-select: none;
+}
+.tab.active { background: #e8452d; color: white; border-color: #e8452d; font-weight: 600; }
+.tab .count {
+  display: inline-block; background: rgba(255,255,255,0.3); border-radius: 10px;
+  padding: 0 6px; font-size: 11px; margin-left: 4px; min-width: 18px; text-align: center;
+}
+.tab.active .count { background: rgba(255,255,255,0.35); }
+
+/* ====== Content ====== */
+.content { padding: 16px; max-width: 700px; margin: 0 auto; }
+.category-title { font-size: 18px; font-weight: 700; margin: 8px 0 12px; padding-left: 4px; display: flex; align-items: center; gap: 8px; }
+.dish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.dish-card {
+  background: white; border-radius: 14px; padding: 14px;
+  cursor: pointer; transition: all 0.15s; border: 2px solid transparent;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04); position: relative;
+  user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.dish-card:active { transform: scale(0.97); }
+.dish-card.selected { border-color: #e8452d; background: #fff8f5; box-shadow: 0 4px 16px rgba(232,69,45,0.15); }
+.dish-card .dish-emoji { font-size: 32px; margin-bottom: 6px; }
+.dish-card .dish-name { font-size: 15px; font-weight: 600; }
+.dish-card .dish-desc { font-size: 12px; color: #9a8070; margin-top: 2px; }
+.dish-card .check-mark {
+  position: absolute; top: 8px; right: 10px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #e8452d; color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; opacity: 0; transform: scale(0.5); transition: all 0.2s;
+}
+.dish-card.selected .check-mark { opacity: 1; transform: scale(1); }
+
+/* ====== Bottom bar ====== */
+.bottom-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: white; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  box-shadow: 0 -2px 16px rgba(0,0,0,0.08);
+  border-radius: 20px 20px 0 0; z-index: 100;
+  display: flex; align-items: center; gap: 10px;
+}
+.bottom-bar .preview { flex: 1; font-size: 14px; color: #8b6f5e; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bottom-bar .count-badge {
+  background: #e8452d; color: white; border-radius: 12px; padding: 2px 10px;
+  font-size: 13px; font-weight: 600; flex-shrink: 0;
+}
+.btn {
+  flex-shrink: 0; padding: 10px 20px; border-radius: 24px; border: none;
+  font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.btn:active { transform: scale(0.95); opacity: 0.9; }
+
+/* ====== Toast ====== */
+.toast {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  background: rgba(0,0,0,0.78); color: white;
+  padding: 12px 28px; border-radius: 24px; font-size: 15px;
+  z-index: 999; pointer-events: none; opacity: 0; transition: all 0.25s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+/* ====== Modal ====== */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  z-index: 200; display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.modal-overlay.show { opacity: 1; pointer-events: auto; }
+.modal {
+  background: white; border-radius: 20px; width: 90%; max-width: 360px;
+  padding: 28px 24px 24px; text-align: center;
+  transform: scale(0.9); transition: transform 0.25s;
+}
+.modal-overlay.show .modal { transform: scale(1); }
+.modal h3 { font-size: 20px; margin-bottom: 6px; }
+.modal .sub { font-size: 13px; color: #9a8070; margin-bottom: 16px; }
+.modal .qr-wrap { background: #faf7f4; border-radius: 16px; padding: 16px; display: inline-block; }
+.modal .qr-wrap img, .modal .qr-wrap canvas { display: block; max-width: 200px; height: auto; }
+.modal .code-text { margin-top: 12px; font-size: 24px; font-weight: 800; letter-spacing: 3px; color: #e8452d; }
+.modal .hint { font-size: 12px; color: #9a8070; margin-top: 8px; }
+.modal .copy-link-btn { margin-top: 10px; background: #fff5f0; color: #e8452d; border: none; padding: 8px 20px; border-radius: 16px; font-size: 13px; cursor: pointer; }
+
+/* ====== Viewer ====== */
+.viewer-wrap { padding: 20px 16px; max-width: 500px; margin: 0 auto; }
+.viewer-status {
+  text-align: center; padding: 30px 20px; color: #9a8070;
+  font-size: 16px; line-height: 2;
+}
+.viewer-status .big-emoji { font-size: 60px; display: block; margin-bottom: 8px; }
+.viewer-dish-list { display: flex; flex-direction: column; gap: 10px; }
+.viewer-dish-item {
+  background: white; border-radius: 14px; padding: 16px;
+  display: flex; align-items: center; gap: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  animation: slideIn 0.3s ease both;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.viewer-dish-item .vd-emoji { font-size: 36px; }
+.viewer-dish-item .vd-info { flex: 1; }
+.viewer-dish-item .vd-name { font-size: 17px; font-weight: 600; }
+.viewer-dish-item .vd-cat { font-size: 12px; color: #9a8070; }
+.viewer-summary {
+  margin-top: 20px; padding: 16px; background: #fff8f5;
+  border-radius: 14px; text-align: center;
+  font-size: 18px; font-weight: 700; color: #e8452d;
+}
+
+/* ====== Setup page ====== */
+.setup-wrap {
+  max-width: 400px; margin: 60px auto; padding: 20px;
+  background: white; border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+}
+.setup-wrap h2 { font-size: 22px; margin-bottom: 20px; text-align: center; }
+.setup-wrap label { display: block; font-size: 13px; font-weight: 600; color: #8b6f5e; margin: 12px 0 4px; }
+.setup-wrap input {
+  width: 100%; padding: 10px 14px; border: 1.5px solid #e8d5c8;
+  border-radius: 12px; font-size: 14px; outline: none;
+  transition: border-color 0.2s;
+}
+.setup-wrap input:focus { border-color: #e8452d; }
+.setup-wrap .save-btn {
+  width: 100%; margin-top: 20px; padding: 12px;
+  background: #e8452d; color: white; border: none;
+  border-radius: 14px; font-size: 16px; font-weight: 600; cursor: pointer;
+}
+.setup-wrap .guide {
+  margin-top: 16px; font-size: 12px; color: #9a8070;
+  background: #faf7f4; padding: 12px; border-radius: 10px;
+  line-height: 1.8;
+}
+.setup-wrap .guide a { color: #e8452d; }
+
+@media (min-width: 600px) {
+  .dish-grid { grid-template-columns: repeat(4, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== Setup Page ====== -->
+<div id="setupPage" class="setup-wrap">
+  <h2>⚙️ 首次设置</h2>
+  <label>Supabase 项目 URL</label>
+  <input id="supabaseUrl" placeholder="https://xxxxx.supabase.co" autocomplete="off">
+  <label>Supabase Anon Key</label>
+  <input id="supabaseKey" placeholder="eyJhbGciOi..." autocomplete="off">
+  <button class="save-btn" onclick="saveConfig()">保存并开始</button>
+  <div class="guide">
+    还没有 Supabase？<br>
+    1. 打开 <a href="https://supabase.com" target="_blank">supabase.com</a> 注册免费账号<br>
+    2. 创建一个新项目<br>
+    3. 在项目 Settings → API 中复制 URL 和 anon key<br>
+    4. 在项目 SQL Editor 中执行下面的建表语句<br>
+    <br>
+    <button onclick="copySQL()" style="background:#fff5f0;color:#e8452d;border:1px solid #f0d5c8;padding:4px 12px;border-radius:8px;cursor:pointer;font-size:12px">📋 复制建表 SQL</button>
+  </div>
+</div>
+
+<!-- ====== Main app (hidden until setup) ====== -->
+<div id="mainApp" style="display:none">
+  <div class="header">
+    <h1 id="headerTitle">回家点菜</h1>
+    <p class="subtitle" id="headerSub">想吃什么点什么，妈给你做</p>
+  </div>
+
+  <div class="role-bar">
+    <button class="role-btn active" id="btnPicker" onclick="switchRole('picker')">🥢 我来点菜</button>
+    <button class="role-btn" id="btnViewer" onclick="switchRole('viewer')">👀 看菜单</button>
+  </div>
+
+  <!-- Picker -->
+  <div id="pickerView">
+    <div class="tabs" id="tabs"></div>
+    <div class="content" id="content"></div>
+    <div class="bottom-bar">
+      <span class="count-badge" id="count">0</span>
+      <span class="preview" id="preview">还没选菜呢~</span>
+      <button class="btn" style="background:#f5f0eb;color:#8b6f5e;font-size:13px" id="btnClear" onclick="clearAll()">清空</button>
+      <button class="btn" style="background:#e8452d;color:white" onclick="showShareModal()">📱 分享给妈妈</button>
+    </div>
+  </div>
+
+  <!-- Viewer -->
+  <div id="viewerView" class="viewer-wrap" style="display:none">
+    <div class="viewer-status" id="viewerStatus">
+      <span class="big-emoji">🍳</span>
+      <div>等待孩子点菜中...</div>
+    </div>
+    <div class="viewer-dish-list" id="viewerDishList"></div>
+    <div class="viewer-summary" id="viewerSummary" style="display:none"></div>
+  </div>
+
+  <!-- Share modal -->
+  <div class="modal-overlay" id="shareModal" onclick="closeShareModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <h3>📱 让妈妈扫码看菜单</h3>
+      <p class="sub">她那边会实时更新</p>
+      <div class="qr-wrap" id="qrCode"></div>
+      <div class="code-text" id="modalRoomCode"></div>
+      <button class="copy-link-btn" onclick="copyViewerLink()">📋 复制链接</button>
+      <p class="hint">也可以直接把链接发给妈妈</p>
+      <button class="btn" style="margin-top:12px;background:#f5f0eb;color:#8b6f5e;width:100%" onclick="closeShareModal()">关闭</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="qrcode.min.js"></script>
+
+<script>
+// =============================================
+// 🔧 配置你的 Supabase（首次打开会提示填写）
+// =============================================
+let SUPABASE_URL = 'https://hwefarhmckbxbnolsmtp.supabase.co';
+let SUPABASE_KEY = 'sb_publishable_yjIfiL9HHmICymVWyV_z5g_PtuB3RA3';
+
+// ====== 菜单数据 ======
+const menu = [
+  {
+    id: 'meat', name: '荤菜', icon: '🥩',
+    dishes: [
+      { id:'d1',emoji:'🍖',name:'红烧肉',desc:'肥而不腻' },
+      { id:'d2',emoji:'🦴',name:'糖醋排骨',desc:'酸甜可口' },
+      { id:'d3',emoji:'🌶️',name:'鱼香肉丝',desc:'经典下饭' },
+      { id:'d4',emoji:'🐔',name:'宫保鸡丁',desc:'麻辣鲜香' },
+      { id:'d5',emoji:'🥓',name:'回锅肉',desc:'香辣下饭' },
+      { id:'d6',emoji:'🐟',name:'水煮鱼',desc:'麻辣鲜嫩' },
+      { id:'d7',emoji:'🍗',name:'可乐鸡翅',desc:'咸甜入味' },
+      { id:'d8',emoji:'🫑',name:'青椒炒肉',desc:'家常美味' },
+      { id:'d9',emoji:'🐂',name:'小炒黄牛肉',desc:'鲜嫩香辣' },
+      { id:'d10',emoji:'🦐',name:'蒜蓉粉丝虾',desc:'蒜香四溢' },
+    ]
+  },
+  {
+    id: 'veg', name: '素菜', icon: '🥬',
+    dishes: [
+      { id:'v1',emoji:'🥬',name:'手撕包菜',desc:'脆爽开胃' },
+      { id:'v2',emoji:'🥦',name:'蒜蓉西兰花',desc:'清香健康' },
+      { id:'v3',emoji:'🥔',name:'酸辣土豆丝',desc:'爽脆酸辣' },
+      { id:'v4',emoji:'🍆',name:'地三鲜',desc:'东北经典' },
+      { id:'v5',emoji:'🍅',name:'番茄炒蛋',desc:'人人爱吃' },
+      { id:'v6',emoji:'🥒',name:'清炒时蔬',desc:'当季新鲜' },
+      { id:'v7',emoji:'🫘',name:'麻婆豆腐',desc:'麻辣滑嫩' },
+      { id:'v8',emoji:'🫘',name:'干煸四季豆',desc:'焦香入味' },
+    ]
+  },
+  {
+    id: 'soup', name: '汤类', icon: '🍲',
+    dishes: [
+      { id:'s1',emoji:'🍅',name:'番茄蛋汤',desc:'酸甜暖胃' },
+      { id:'s2',emoji:'🥬',name:'紫菜蛋花汤',desc:'清淡鲜美' },
+      { id:'s3',emoji:'🦴',name:'排骨玉米汤',desc:'浓郁滋补' },
+      { id:'s4',emoji:'🌶️',name:'酸辣汤',desc:'开胃暖身' },
+      { id:'s5',emoji:'🥒',name:'冬瓜排骨汤',desc:'清甜解腻' },
+      { id:'s6',emoji:'🐟',name:'鲫鱼豆腐汤',desc:'鲜美营养' },
+    ]
+  },
+  {
+    id: 'cold', name: '凉菜', icon: '🥗',
+    dishes: [
+      { id:'c1',emoji:'🥒',name:'凉拌黄瓜',desc:'清脆爽口' },
+      { id:'c2',emoji:'🫘',name:'皮蛋豆腐',desc:'嫩滑鲜美' },
+      { id:'c3',emoji:'🐔',name:'口水鸡',desc:'麻辣鲜香' },
+      { id:'c4',emoji:'🍄',name:'凉拌木耳',desc:'脆嫩开胃' },
+      { id:'c5',emoji:'🍆',name:'蒜泥茄子',desc:'软糯蒜香' },
+      { id:'c6',emoji:'🥜',name:'老醋花生',desc:'酸甜酥脆' },
+    ]
+  },
+  {
+    id: 'staple', name: '主食', icon: '🍚',
+    dishes: [
+      { id:'st1',emoji:'🍚',name:'米饭',desc:'粒粒分明' },
+      { id:'st2',emoji:'🥟',name:'饺子',desc:'皮薄馅大' },
+      { id:'st3',emoji:'🍜',name:'面条',desc:'筋道爽滑' },
+      { id:'st4',emoji:'🥮',name:'花卷',desc:'松软香甜' },
+      { id:'st5',emoji:'🥟',name:'馄饨',desc:'鲜滑暖胃' },
+    ]
+  },
+];
+
+const dishMap = {};
+for (const cat of menu) {
+  for (const d of cat.dishes) {
+    d.category = cat.name;
+    d.categoryId = cat.id;
+    dishMap[d.id] = d;
+  }
+}
+
+// ====== 状态 ======
+let role = 'picker';
+let selected = new Set();
+let activeCategory = menu[0].id;
+let roomId = '';
+let pollTimer = null;
+
+// REST API 请求封装
+const API = SUPABASE_URL + '/rest/v1/orders';
+const HEADERS = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': 'Bearer ' + SUPABASE_KEY,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation',
+};
+
+// ====== 初始化 ======
+function initApp() {
+  document.getElementById('setupPage').style.display = 'none';
+  document.getElementById('mainApp').style.display = '';
+
+  const params = new URLSearchParams(window.location.search);
+  roomId = params.get('room');
+  role = params.get('role') === 'viewer' ? 'viewer' : 'picker';
+
+  if (!roomId) {
+    roomId = genRoomId();
+    updateURL();
+  }
+
+  switchRole(role, true);
+  loadCurrentOrders();
+  startPolling();
+}
+
+function genRoomId() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let id = '';
+  for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
+}
+
+function updateURL() {
+  const url = new URL(window.location);
+  url.searchParams.set('room', roomId);
+  url.searchParams.set('role', role);
+  window.history.replaceState({}, '', url);
+}
+
+// ====== 数据同步（REST API + 轮询） ======
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(loadCurrentOrders, 2000);
+}
+
+async function loadCurrentOrders() {
+  try {
+    const res = await fetch(API + '?room_id=eq.' + roomId + '&select=dishes', {
+      headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const newOrders = (data.length > 0 && data[0].dishes) ? data[0].dishes : [];
+
+    if (JSON.stringify([...selected].sort()) !== JSON.stringify([...newOrders].sort())) {
+      selected = new Set(newOrders);
+      if (role === 'picker') { renderTabs(); renderDishes(); renderBottom(); }
+      renderViewer();
+    }
+  } catch(e) {}
+}
+
+async function syncToServer() {
+  if (role !== 'picker') return;
+  const orders = [...selected];
+  try {
+    // 先查是否存在
+    const check = await fetch(API + '?room_id=eq.' + roomId + '&select=room_id', {
+      headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+    });
+    const existing = await check.json();
+
+    if (existing.length > 0) {
+      // UPDATE
+      await fetch(API + '?room_id=eq.' + roomId, {
+        method: 'PATCH',
+        headers: HEADERS,
+        body: JSON.stringify({ dishes: orders, updated_at: new Date().toISOString() }),
+      });
+    } else {
+      // INSERT
+      await fetch(API, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ room_id: roomId, dishes: orders, updated_at: new Date().toISOString() }),
+      });
+    }
+  } catch(e) {}
+}
+
+// ====== 角色切换 ======
+function switchRole(newRole, skipSync) {
+  role = newRole;
+  document.getElementById('btnPicker').classList.toggle('active', role === 'picker');
+  document.getElementById('btnViewer').classList.toggle('active', role === 'viewer');
+  document.getElementById('pickerView').style.display = role === 'picker' ? '' : 'none';
+  document.getElementById('viewerView').style.display = role === 'viewer' ? '' : 'none';
+
+  if (role === 'picker') {
+    document.getElementById('headerTitle').textContent = '回家点菜';
+    document.getElementById('headerSub').textContent = '想吃什么点什么，妈给你做';
+  } else {
+    document.getElementById('headerTitle').textContent = '今日菜单';
+    document.getElementById('headerSub').textContent = '孩子正在点菜，实时更新';
+    renderViewer();
+  }
+
+  if (!skipSync) {
+    updateURL();
+    if (role === 'picker') { renderTabs(); renderDishes(); renderBottom(); }
+    if (role === 'viewer') renderViewer();
+  }
+}
+
+// ====== 菜品操作 ======
+function toggleDish(id) {
+  if (role !== 'picker') return;
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  syncToServer();
+  renderTabs();
+  renderDishes();
+  renderBottom();
+}
+
+function clearAll() {
+  if (selected.size === 0) return;
+  selected.clear();
+  syncToServer();
+  renderTabs();
+  renderDishes();
+  renderBottom();
+  showToast('已清空');
+}
+
+// ====== Picker 渲染 ======
+function renderTabs() {
+  document.getElementById('tabs').innerHTML = menu.map(cat => {
+    const count = cat.dishes.filter(d => selected.has(d.id)).length;
+    return `<div class="tab ${cat.id===activeCategory?'active':''}" onclick="switchCat('${cat.id}')">
+      ${cat.icon} ${cat.name} ${count>0?`<span class="count">${count}</span>`:''}
+    </div>`;
+  }).join('');
+}
+
+function switchCat(id) { activeCategory = id; renderTabs(); renderDishes(); }
+
+function renderDishes() {
+  const cat = menu.find(c => c.id === activeCategory);
+  document.getElementById('content').innerHTML = `
+    <div class="category-title"><span>${cat.icon}</span>${cat.name}</div>
+    <div class="dish-grid">
+      ${cat.dishes.map(d => `
+        <div class="dish-card ${selected.has(d.id)?'selected':''}" onclick="toggleDish('${d.id}')">
+          <div class="check-mark">✓</div>
+          <div class="dish-emoji">${d.emoji}</div>
+          <div class="dish-name">${d.name}</div>
+          <div class="dish-desc">${d.desc}</div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+function renderBottom() {
+  const arr = [...selected];
+  document.getElementById('count').textContent = arr.length;
+  document.getElementById('btnClear').style.display = arr.length > 0 ? '' : 'none';
+  document.getElementById('preview').textContent = arr.length === 0
+    ? '还没选菜呢~'
+    : arr.map(id => dishMap[id]?.name || '').filter(Boolean).join('、');
+}
+
+// ====== Viewer 渲染 ======
+function renderViewer() {
+  const arr = [...selected];
+  const statusEl = document.getElementById('viewerStatus');
+  const listEl = document.getElementById('viewerDishList');
+  const summaryEl = document.getElementById('viewerSummary');
+
+  if (arr.length === 0) {
+    statusEl.style.display = '';
+    listEl.innerHTML = '';
+    summaryEl.style.display = 'none';
+    return;
+  }
+
+  statusEl.style.display = 'none';
+  const byCat = {};
+  for (const id of arr) {
+    const d = dishMap[id];
+    if (!d) continue;
+    if (!byCat[d.categoryId]) byCat[d.categoryId] = [];
+    byCat[d.categoryId].push(d);
+  }
+
+  let html = '';
+  for (const cat of menu) {
+    const dishes = byCat[cat.id];
+    if (!dishes || dishes.length === 0) continue;
+    html += `<div style="font-weight:700;margin:16px 0 8px;padding-left:4px">${cat.icon} ${cat.name}（${dishes.length}道）</div>`;
+    for (const d of dishes) {
+      html += `<div class="viewer-dish-item">
+        <div class="vd-emoji">${d.emoji}</div>
+        <div class="vd-info"><div class="vd-name">${d.name}</div><div class="vd-cat">${d.desc}</div></div>
+      </div>`;
+    }
+  }
+  listEl.innerHTML = html;
+  summaryEl.style.display = '';
+  summaryEl.innerHTML = `共 ${arr.length} 道菜，辛苦妈妈了 ❤️`;
+}
+
+// ====== 分享弹窗 ======
+function showShareModal() {
+  const viewerUrl = new URL(window.location);
+  viewerUrl.searchParams.set('role', 'viewer');
+  const url = viewerUrl.toString();
+
+  document.getElementById('modalRoomCode').textContent = roomId;
+  document.getElementById('qrCode').innerHTML = '';
+  document.getElementById('shareModal').classList.add('show');
+
+  // 延迟生成 QR 确保 DOM 渲染完
+  setTimeout(() => {
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(document.getElementById('qrCode'), {
+        text: url,
+        width: 200,
+        height: 200,
+        colorDark: '#3d2c1e',
+        colorLight: '#ffffff',
+      });
+    } else {
+      document.getElementById('qrCode').innerHTML = '<p style="padding:20px;color:#999">二维码生成失败，请用链接分享</p>';
+    }
+  }, 100);
+}
+
+function closeShareModal(e) {
+  if (e && e.target !== document.getElementById('shareModal')) return;
+  document.getElementById('shareModal').classList.remove('show');
+}
+
+function copyViewerLink() {
+  const viewerUrl = new URL(window.location);
+  viewerUrl.searchParams.set('role', 'viewer');
+  const url = viewerUrl.toString();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => showToast('链接已复制，发给妈妈吧！'));
+  } else {
+    showToast('复制失败，请手动复制地址栏链接');
+  }
+}
+
+// ====== Setup ======
+function saveConfig() {
+  const url = document.getElementById('supabaseUrl').value.trim();
+  const key = document.getElementById('supabaseKey').value.trim();
+  if (!url || !key) { showToast('请填写完整'); return; }
+  localStorage.setItem('sb_url', url);
+  localStorage.setItem('sb_key', key);
+  SUPABASE_URL = url;
+  SUPABASE_KEY = key;
+  initSupabase();
+}
+
+function copySQL() {
+  const sql = `-- 在 Supabase SQL Editor 中执行以下语句
+CREATE TABLE IF NOT EXISTS orders (
+  room_id TEXT PRIMARY KEY,
+  dishes JSONB DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 启用实时同步
+ALTER PUBLICATION supabase_realtime ADD TABLE orders;`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(sql).then(() => showToast('SQL 已复制'));
+  } else {
+    // Fallback: show in a modal or alert
+    alert('请手动复制：\n\n' + sql);
+  }
+}
+
+// ====== Toast ======
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// ====== 启动 ======
+initApp();
+</script>
+</body>
+</html>
