@@ -642,10 +642,7 @@ function updateIdentityUI() {
 
 // ====== 工具函数 ======
 function genRoomId() {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  let id = '';
-  for (let i = 0; i < 6; i++) id += chars[Math.floor(Math.random() * chars.length)];
-  return id;
+  return 'KITCHEN'; // 默认房间号，所有设备共用
 }
 
 function updateURL() {
