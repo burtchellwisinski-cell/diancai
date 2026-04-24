@@ -1,0 +1,7 @@
+{
+  "appId": "com.home.diancai",
+  "appName": "回家点菜",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {}
+}
