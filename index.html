@@ -263,7 +263,8 @@ body {
       <span class="count-badge" id="count">0</span>
       <span class="preview" id="preview">还没选菜呢~</span>
       <button class="btn" style="background:#f5f0eb;color:#8b6f5e;font-size:12px" id="btnClear" onclick="clearMyPicks()">清空</button>
-      <button class="btn" style="background:#e8452d;color:white;font-size:13px" onclick="showShareModal()">📱 分享</button>
+      <button class="btn" style="background:#e8452d;color:white;font-size:13px" id="btnConfirm" onclick="confirmMyPicks()">确 定</button>
+      <button class="btn" style="background:#e8452d;color:white;font-size:13px" id="btnShare" onclick="showShareModal()" hidden>📱 分享</button>
     </div>
   </div>
 
@@ -418,7 +419,8 @@ const DEFAULT_MENU = [
 let myIdentity = '';
 let pendingIdentity = '';
 let role = 'picker';
-let allOrders = {};       // { 身份: [dishId, ...] }
+let allOrders = {};       // { 身份: [dishId, ...] }（已确认的）
+let localPicks = new Set();   // 当前未确认的选择
 let customMenu = [];      // 管理员添加的自定义菜品
 let activeCategory = DEFAULT_MENU[0].id;
 let roomId = '';
@@ -450,7 +452,17 @@ function buildDishMap() {
 
 // ====== 我自己选的菜 ======
 function getMySelected() {
-  return new Set(allOrders[myIdentity] || []);
+  return new Set(localPicks);
+}
+
+// ====== 检查是否有未确认的改动 ======
+function isDirty() {
+  const confirmed = new Set(allOrders[myIdentity] || []);
+  if (localPicks.size !== confirmed.size) return true;
+  for (const id of localPicks) {
+    if (!confirmed.has(id)) return true;
+  }
+  return false;
 }
 
 // ====== 所有被选的菜（合并所有人的） ======
@@ -459,6 +471,7 @@ function getAllSelected() {
   for (const arr of Object.values(allOrders)) {
     for (const id of arr) { s.add(id); }
   }
+  for (const id of localPicks) { s.add(id); }
   return s;
 }
 
@@ -600,6 +613,11 @@ async function loadData() {
     const ordersChanged = JSON.stringify(allOrders) !== JSON.stringify(newOrders);
     const menuChanged = JSON.stringify(customMenu) !== JSON.stringify(newCustom);
 
+    // 如果没有未确认的改动，从服务器同步当前身份的已确认选择
+    if (!isDirty() && newOrders[myIdentity]) {
+      localPicks = new Set(newOrders[myIdentity]);
+    }
+
     allOrders = newOrders;
     customMenu = newCustom;
     if (menuChanged) menuVersion++;
@@ -607,37 +625,6 @@ async function loadData() {
     if (ordersChanged || menuChanged) {
       if (role === 'picker') { renderTabs(); renderDishes(); renderBottom(); }
       renderViewer();
-    }
-  } catch(e) {}
-}
-
-async function syncMyOrders() {
-  if (!myIdentity) return;
-  const myList = [...getMySelected()];
-
-  // 读取最新数据再写（减少冲突）
-  try {
-    const check = await fetch(API + '?room_id=eq.' + roomId + '&select=dishes,custom_menu', {
-      headers: { ...HEADERS, 'Prefer': 'return=minimal' },
-    });
-    const existing = await check.json();
-
-    let merged = {};
-    if (existing.length > 0 && existing[0].dishes) {
-      merged = existing[0].dishes;
-    }
-    merged[myIdentity] = myList;
-
-    if (existing.length > 0) {
-      await fetch(API + '?room_id=eq.' + roomId, {
-        method: 'PATCH', headers: HEADERS,
-        body: JSON.stringify({ dishes: merged, updated_at: new Date().toISOString() }),
-      });
-    } else {
-      await fetch(API, {
-        method: 'POST', headers: HEADERS,
-        body: JSON.stringify({ room_id: roomId, dishes: merged, custom_menu: customMenu, updated_at: new Date().toISOString() }),
-      });
     }
   } catch(e) {}
 }
@@ -689,28 +676,45 @@ function switchRole(newRole, skipSync) {
 // ====== 菜品操作 ======
 function toggleDish(id) {
   if (role !== 'picker' || !myIdentity) return;
-  const mySet = getMySelected();
-  if (mySet.has(id)) mySet.delete(id);
-  else mySet.add(id);
-  allOrders[myIdentity] = [...mySet];
-  if (allOrders[myIdentity].length === 0) delete allOrders[myIdentity];
-  syncMyOrders();
+  if (localPicks.has(id)) localPicks.delete(id);
+  else localPicks.add(id);
   renderTabs();
   renderDishes();
   renderBottom();
 }
 
+function confirmMyPicks() {
+  if (role !== 'picker' || !myIdentity) return;
+  const arr = [...localPicks];
+  // 先读最新数据再写
+  fetch(API + '?room_id=eq.' + roomId + '&select=dishes,custom_menu', {
+    headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+  }).then(r => r.json()).then(data => {
+    let merged = {};
+    if (data.length > 0 && data[0].dishes) merged = data[0].dishes;
+    merged[myIdentity] = arr;
+    allOrders[myIdentity] = arr;
+    if (arr.length === 0) delete allOrders[myIdentity];
+    const method = data.length > 0 ? 'PATCH' : 'POST';
+    const url = data.length > 0 ? API + '?room_id=eq.' + roomId : API;
+    return fetch(url, {
+      method, headers: HEADERS,
+      body: JSON.stringify({ room_id: roomId, dishes: merged, updated_at: new Date().toISOString() }),
+    });
+  }).then(() => {
+    renderTabs(); renderDishes(); renderBottom(); renderViewer();
+    showToast('已确定菜单 ✓');
+  }).catch(() => {});
+}
+
 function clearMyPicks() {
   if (role !== 'picker' || !myIdentity) return;
-  const mySet = getMySelected();
-  if (mySet.size === 0) return;
-  allOrders[myIdentity] = [];
-  delete allOrders[myIdentity];
-  syncMyOrders();
+  if (localPicks.size === 0) return;
+  localPicks.clear();
   renderTabs();
   renderDishes();
   renderBottom();
-  showToast('已清空我的选择');
+  showToast('已清空选择');
 }
 
 // ====== Picker 渲染 ======
@@ -762,8 +766,11 @@ function renderBottom() {
   const mySet = getMySelected();
   const arr = [...mySet];
   const dishMap = buildDishMap();
+  const dirty = isDirty();
   document.getElementById('count').textContent = arr.length;
   document.getElementById('btnClear').style.display = arr.length > 0 ? '' : 'none';
+  document.getElementById('btnConfirm').style.display = dirty ? '' : 'none';
+  document.getElementById('btnShare').hidden = dirty;
   document.getElementById('preview').textContent = arr.length === 0
     ? '还没选菜呢~'
     : arr.map(id => dishMap[id]?.name || '').filter(Boolean).join('、');
