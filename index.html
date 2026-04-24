@@ -500,13 +500,9 @@ function finishInit() {
   roomId = params.get('room');
   role = params.get('role') === 'viewer' ? 'viewer' : 'picker';
 
-  if (!roomId) {
-    const savedRoom = localStorage.getItem('diancai_room');
-    const savedRole = localStorage.getItem('diancai_role');
-    if (savedRoom) roomId = savedRoom;
-    if (savedRole === 'viewer') role = 'viewer';
-  }
-  if (!roomId) { roomId = genRoomId(); updateURL(); }
+  // 统一用 KITCHEN 房间，所有人自动在一起
+  if (!roomId) roomId = 'KITCHEN';
+  updateURL();
 
   localStorage.setItem('diancai_room', roomId);
   localStorage.setItem('diancai_role', role);
