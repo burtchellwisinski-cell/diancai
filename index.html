@@ -263,7 +263,7 @@ body {
       <span class="count-badge" id="count">0</span>
       <span class="preview" id="preview">还没选菜呢~</span>
       <button class="btn" style="background:#f5f0eb;color:#8b6f5e;font-size:12px" id="btnClear" onclick="clearMyPicks()">清空</button>
-      <button class="btn" style="background:#e8452d;color:white;font-size:13px" id="btnConfirm" onclick="confirmMyPicks()">确 定</button>
+      <button class="btn" style="background:#ccc;color:#fff;font-size:13px;pointer-events:none" id="btnConfirm" onclick="confirmMyPicks()">确 定</button>
       <button class="btn" style="background:#e8452d;color:white;font-size:13px" id="btnShare" onclick="showShareModal()" hidden>📱 分享</button>
     </div>
   </div>
@@ -769,8 +769,18 @@ function renderBottom() {
   const dirty = isDirty();
   document.getElementById('count').textContent = arr.length;
   document.getElementById('btnClear').style.display = arr.length > 0 ? '' : 'none';
-  document.getElementById('btnConfirm').style.display = dirty ? '' : 'none';
   document.getElementById('btnShare').hidden = dirty;
+  // 确定按钮：始终显示，有改动时亮红可点，没改动时灰色不可点
+  const cfm = document.getElementById('btnConfirm');
+  if (dirty) {
+    cfm.style.background = '#e8452d';
+    cfm.style.color = 'white';
+    cfm.style.pointerEvents = 'auto';
+  } else {
+    cfm.style.background = '#ccc';
+    cfm.style.color = '#fff';
+    cfm.style.pointerEvents = 'none';
+  }
   document.getElementById('preview').textContent = arr.length === 0
     ? '还没选菜呢~'
     : arr.map(id => dishMap[id]?.name || '').filter(Boolean).join('、');
