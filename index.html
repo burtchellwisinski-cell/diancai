@@ -3,7 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>回家点菜 🍳</title>
+<title>回家点菜</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#e8452d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="点菜">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -366,14 +372,31 @@ function initApp() {
   roomId = params.get('room');
   role = params.get('role') === 'viewer' ? 'viewer' : 'picker';
 
+  // 如果没有 room，尝试从 localStorage 恢复（妈妈第一次之后打开）
+  if (!roomId) {
+    const savedRoom = localStorage.getItem('diancai_room');
+    const savedRole = localStorage.getItem('diancai_role');
+    if (savedRoom) roomId = savedRoom;
+    if (savedRole === 'viewer') role = 'viewer';
+  }
+
   if (!roomId) {
     roomId = genRoomId();
     updateURL();
   }
 
+  // 记住房间号和角色（方便妈妈下次直接打开）
+  localStorage.setItem('diancai_room', roomId);
+  localStorage.setItem('diancai_role', role);
+
   switchRole(role, true);
   loadCurrentOrders();
   startPolling();
+
+  // 注册 Service Worker（PWA 离线缓存）
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
 }
 
 function genRoomId() {

@@ -1,0 +1,19 @@
+{
+  "name": "回家点菜",
+  "short_name": "点菜",
+  "description": "在家点菜，妈妈实时看",
+  "start_url": "/diancai/",
+  "scope": "/diancai/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff5f0",
+  "theme_color": "#e8452d",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
