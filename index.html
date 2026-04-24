@@ -586,15 +586,13 @@ function confirmIdentity() {
 }
 
 function showAdminPassword() {
-  const existing = localStorage.getItem('diancai_admin_pw');
-  const isNew = !existing;
   const pwHtml = `
     <div style="text-align:center">
-      <p style="font-size:14px;margin-bottom:10px">${isNew ? '首次设置管理员密码' : '请输入管理员密码'}</p>
-      <input id="adminPwInput" type="password" placeholder="${isNew ? '设置密码（至少4位）' : '输入密码'}" style="width:100%;padding:10px;border:1.5px solid #e8d5c8;border-radius:10px;font-size:15px;text-align:center;outline:none;margin-bottom:8px" maxlength="20">
+      <p style="font-size:14px;margin-bottom:10px">请输入管理员密码</p>
+      <input id="adminPwInput" type="password" placeholder="输入密码" style="width:100%;padding:10px;border:1.5px solid #e8d5c8;border-radius:10px;font-size:15px;text-align:center;outline:none;margin-bottom:8px" maxlength="20">
       <div style="display:flex;gap:8px">
         <button class="btn" style="flex:1;background:#f5f0eb;color:#8b6f5e" onclick="cancelAdminPw()">取消</button>
-        <button class="btn" style="flex:1;background:#e8452d;color:white" onclick="verifyAdminPw('${isNew}')">确定</button>
+        <button class="btn" style="flex:1;background:#e8452d;color:white" onclick="verifyAdminPw()">确定</button>
       </div>
       <p id="adminPwError" style="font-size:12px;color:#e8452d;margin-top:6px;display:none"></p>
     </div>
@@ -609,23 +607,13 @@ function cancelAdminPw() {
   showIdentityPicker();
 }
 
-function verifyAdminPw(isNew) {
+function verifyAdminPw() {
   const input = document.getElementById('adminPwInput').value.trim();
   const errEl = document.getElementById('adminPwError');
-  if (input.length < 4) {
-    errEl.textContent = '密码至少4位';
+  if (input !== '070703') {
+    errEl.textContent = '密码错误';
     errEl.style.display = '';
     return;
-  }
-  if (isNew === 'true') {
-    localStorage.setItem('diancai_admin_pw', input);
-  } else {
-    const existing = localStorage.getItem('diancai_admin_pw');
-    if (input !== existing) {
-      errEl.textContent = '密码错误';
-      errEl.style.display = '';
-      return;
-    }
   }
   myIdentity = '管理员';
   localStorage.setItem('diancai_identity', myIdentity);
