@@ -237,6 +237,7 @@ body {
     <h3>选择你的身份</h3>
     <p class="sub">每个人选一个身份，方便知道谁点了什么</p>
     <div class="identity-grid" id="identityGrid"></div>
+    <button class="btn" id="confirmIdentityBtn" style="background:#e8452d;color:white;width:100%;margin-top:8px;opacity:0.4;pointer-events:none" onclick="confirmIdentity()">确 定</button>
   </div>
 </div>
 
@@ -415,6 +416,7 @@ const DEFAULT_MENU = [
 
 // ====== 状态 ======
 let myIdentity = '';
+let pendingIdentity = '';
 let role = 'picker';
 let allOrders = {};       // { 身份: [dishId, ...] }
 let customMenu = [];      // 管理员添加的自定义菜品
@@ -510,13 +512,15 @@ function finishInit() {
 
 // ====== 身份选择 ======
 function showIdentityPicker() {
+  pendingIdentity = '';
   const grid = document.getElementById('identityGrid');
   grid.innerHTML = IDENTITIES.map(i =>
-    `<div class="identity-card" onclick="selectIdentity('${i.id}')">
+    `<div class="identity-card" id="idCard_${i.id}" onclick="selectIdentity('${i.id}')">
       <span class="id-emoji">${i.emoji}</span>
       <span class="id-name">${i.id}</span>
     </div>`
   ).join('');
+  updateConfirmBtn();
   document.getElementById('identityModal').classList.add('show');
   document.getElementById('mainApp').style.display = 'none';
 }
@@ -526,8 +530,30 @@ function openIdentityPicker() {
 }
 
 function selectIdentity(id) {
-  myIdentity = id;
-  localStorage.setItem('diancai_identity', id);
+  pendingIdentity = id;
+  // 更新卡片高亮
+  IDENTITIES.forEach(i => {
+    const el = document.getElementById('idCard_' + i.id);
+    if (el) el.classList.toggle('selected', i.id === id);
+  });
+  updateConfirmBtn();
+}
+
+function updateConfirmBtn() {
+  const btn = document.getElementById('confirmIdentityBtn');
+  if (pendingIdentity) {
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+  } else {
+    btn.style.opacity = '0.4';
+    btn.style.pointerEvents = 'none';
+  }
+}
+
+function confirmIdentity() {
+  if (!pendingIdentity) return;
+  myIdentity = pendingIdentity;
+  localStorage.setItem('diancai_identity', myIdentity);
   finishInit();
 }
 
