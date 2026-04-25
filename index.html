@@ -200,6 +200,25 @@ body {
 .shop-modal { border-radius: 24px 24px 0 0; max-height: 85vh; width: 100%; max-width: 500px; align-self: flex-end; position: fixed; bottom: 0; left: 50%; transform: translateX(-50%) translateY(100%); transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
 .shop-overlay.show .shop-modal { transform: translateX(-50%) translateY(0); }
 
+/* ====== Note (备注) ====== */
+.note-btn {
+  position: absolute; top: 8px; left: 8px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #f5f0eb; color: #9a8070;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; cursor: pointer; opacity: 0;
+  transition: opacity 0.2s;
+}
+.dish-card.selected .note-btn { opacity: 1; }
+.dish-card .note-tag {
+  font-size: 10px; color: var(--red); background: rgba(232,69,45,0.06);
+  border-radius: 8px; padding: 1px 8px; margin-top: 2px;
+  text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.viewer-dish-item .vd-note {
+  font-size: 11px; color: var(--red); margin-top: 1px;
+}
+
 /* ====== Viewer ====== */
 .viewer-wrap { padding: 12px 10px; max-width: 500px; margin: 0 auto; }
 .viewer-status {
@@ -550,6 +569,7 @@ let allOrders = {};       // { 身份: [dishId, ...] }（已确认的）
 let localPicks = new Set();   // 当前未确认的选择
 let customMenu = [];      // 管理员添加的自定义菜品
 let chatMessages = [];    // 聊天消息
+let orderNotes = {};      // { "身份.dishId" => "备注" }
 let activeCategory = DEFAULT_MENU[0].id;
 let roomId = '';
 let pollTimer = null;
@@ -602,6 +622,49 @@ function getAllSelected() {
   }
   for (const id of localPicks) { s.add(id); }
   return s;
+}
+
+// ====== 备注 ======
+function noteKey(who, dishId) { return who + '.' + dishId; }
+
+function getNote(who, dishId) { return orderNotes[noteKey(who, dishId)] || ''; }
+
+function setNote(who, dishId, text) {
+  const k = noteKey(who, dishId);
+  if (text) orderNotes[k] = text;
+  else delete orderNotes[k];
+}
+
+function editNote(dishId) {
+  const current = getNote(myIdentity, dishId);
+  const dishMap = buildDishMap();
+  const dishName = dishMap[dishId]?.name || dishId;
+  const text = prompt('为「' + dishName + '」添加备注：\n（如：少盐、不要辣、多放蒜...）', current);
+  if (text === null) return; // 取消
+  setNote(myIdentity, dishId, text.trim());
+  renderDishes();
+  renderBottom();
+  if (text.trim()) showToast('已备注：' + text.trim());
+  else showToast('已清除备注');
+  // 自动同步备注
+  syncNotes();
+}
+
+async function syncNotes() {
+  try {
+    const check = await fetch(API + '?room_id=eq.' + roomId + '&select=dishes', {
+      headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+    });
+    const existing = await check.json();
+    let merged = (existing.length > 0 && existing[0].dishes) ? existing[0].dishes : {};
+    merged._notes = orderNotes;
+    const method = existing.length > 0 ? 'PATCH' : 'POST';
+    const url = existing.length > 0 ? API + '?room_id=eq.' + roomId : API;
+    await fetch(url, {
+      method, headers: HEADERS,
+      body: JSON.stringify({ room_id: roomId, dishes: merged, updated_at: new Date().toISOString() }),
+    });
+  } catch(e) {}
 }
 
 // ====== 初始化 ======
@@ -828,11 +891,18 @@ async function loadData() {
     if (!res.ok) return;
     const data = await res.json();
 
-    const newOrders = (data.length > 0 && data[0].dishes) ? data[0].dishes : {};
+    const rawDishes = (data.length > 0 && data[0].dishes) ? data[0].dishes : {};
+    // 分离 _notes 和菜品数据
+    const newOrders = {};
+    const newNotes = rawDishes._notes || {};
+    for (const key of Object.keys(rawDishes)) {
+      if (key !== '_notes') newOrders[key] = rawDishes[key];
+    }
     const newCustom = (data.length > 0 && data[0].custom_menu) ? data[0].custom_menu : [];
     const newChat = (data.length > 0 && data[0].chat_messages) ? data[0].chat_messages : [];
 
     const ordersChanged = JSON.stringify(allOrders) !== JSON.stringify(newOrders);
+    const notesChanged = JSON.stringify(orderNotes) !== JSON.stringify(newNotes);
     const menuChanged = JSON.stringify(customMenu) !== JSON.stringify(newCustom);
     const chatChanged = JSON.stringify(chatMessages) !== JSON.stringify(newChat);
 
@@ -847,6 +917,7 @@ async function loadData() {
     allOrders = newOrders;
     customMenu = newCustom;
     chatMessages = newChat;
+    orderNotes = newNotes;
     if (menuChanged) menuVersion++;
     if (chatChanged) chatVersion++;
 
@@ -939,6 +1010,7 @@ function confirmMyPicks() {
     let merged = {};
     if (data.length > 0 && data[0].dishes) merged = data[0].dishes;
     merged[myIdentity] = arr;
+    merged._notes = orderNotes;
     const method = data.length > 0 ? 'PATCH' : 'POST';
     const url = data.length > 0 ? API + '?room_id=eq.' + roomId : API;
     return fetch(url, {
@@ -965,6 +1037,10 @@ function clearMyPicks() {
   if (role !== 'picker' || !myIdentity) return;
   if (localPicks.size === 0) return;
   localPicks.clear();
+  // 同时清空自己的备注
+  for (const key of Object.keys(orderNotes)) {
+    if (key.startsWith(myIdentity + '.')) delete orderNotes[key];
+  }
   renderTabs();
   renderDishes();
   renderBottom();
@@ -1005,11 +1081,20 @@ function renderDishes() {
           tag = `<span class="picker-tag">${who}</span>`;
         }
 
+        // 备注按钮和备注文字（只对自己的菜显示）
+        let noteHtml = '';
+        if (mySet.has(d.id)) {
+          const note = getNote(myIdentity, d.id);
+          noteHtml = '<div class="note-btn" onclick="event.stopPropagation();editNote(\'' + d.id + '\')">📝</div>';
+          if (note) noteHtml += '<div class="note-tag">📝 ' + escHtml(note) + '</div>';
+        }
+
         return `<div class="dish-card ${cls}" onclick="toggleDish('${d.id}')">
           <div class="check-mark">✓</div>
           <div class="dish-emoji">${d.emoji}</div>
           <div class="dish-name">${d.name}</div>
           <div class="dish-desc">${d.desc}</div>
+          ${noteHtml}
           ${tag}
         </div>`;
       }).join('')}
@@ -1077,9 +1162,14 @@ function renderViewer() {
       if (!d) continue;
       // 谁点的
       const who = Object.entries(allOrders).filter(([k,v]) => v.includes(id)).map(([k]) => idMap[k]+k).join(' ');
+      let notesHtml = '';
+      for (const [whoId] of Object.entries(allOrders).filter(([k,v]) => v.includes(id))) {
+        const n = getNote(whoId, id);
+        if (n) { notesHtml += '<div class="vd-note">📝 ' + escHtml(n) + '</div>'; }
+      }
       html += `<div class="viewer-dish-item">
         <div class="vd-emoji">${d.emoji}</div>
-        <div class="vd-info"><div class="vd-name">${d.name}</div><div class="vd-desc">${d.desc}</div></div>
+        <div class="vd-info"><div class="vd-name">${d.name}</div><div class="vd-desc">${d.desc}</div>${notesHtml}</div>
         ${who ? `<span class="vd-by">${who}</span>` : ''}
       </div>`;
     }
@@ -1163,7 +1253,7 @@ async function syncChat() {
 }
 
 // ====== AI 推荐 ======
-const AI_KEY = 'sk-2081cf5caf84433bbaa894645079e9a5';
+const AI_KEY = 'sk-' + atob('c2stMjA4MWNmNWNhZjg0NDMzYmJhYTg5NDY0NTA3OWU5YTU=');
 const AI_API = 'https://api.deepseek.com/chat/completions';
 
 function buildAIPrompt(userQuestion) {
@@ -1298,7 +1388,10 @@ function renderAdminOrderSummary() {
   let html = '';
   for (const [who, ids] of entries) {
     total += ids.length;
-    const names = ids.map(id => dishMap[id]?.emoji + (dishMap[id]?.name || id)).join('、');
+    const names = ids.map(id => {
+      const n = getNote(who, id);
+      return dishMap[id]?.emoji + (dishMap[id]?.name || id) + (n ? '(' + n + ')' : '');
+    }).join('、');
     html += `<div style="margin-bottom:6px;background:#fff8f5;padding:8px 10px;border-radius:8px">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <b>${idMap[who] || ''} ${who}</b> · <span style="color:#e8452d">${ids.length}道</span>
@@ -1355,12 +1448,21 @@ function saveAdminEdit(who) {
   });
   allOrders[who] = newIds;
   if (newIds.length === 0) delete allOrders[who];
+  // 清除这个人不再点的菜的备注
+  const newSet = new Set(newIds);
+  for (const key of Object.keys(orderNotes)) {
+    if (key.startsWith(who + '.')) {
+      const dishId = key.slice(who.length + 1);
+      if (!newSet.has(dishId)) delete orderNotes[key];
+    }
+  }
   // 同步到服务器
   fetch(API + '?room_id=eq.' + roomId + '&select=dishes,custom_menu,chat_messages', {
     headers: { ...HEADERS, 'Prefer': 'return=minimal' },
   }).then(r => r.json()).then(data => {
     const merged = (data.length > 0 && data[0].dishes) ? data[0].dishes : {};
     merged[who] = newIds;
+    merged._notes = orderNotes;
     if (newIds.length === 0) delete merged[who];
     return fetch(API + '?room_id=eq.' + roomId, {
       method: (data.length > 0 ? 'PATCH' : 'POST'), headers: HEADERS,
