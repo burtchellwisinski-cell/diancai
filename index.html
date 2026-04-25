@@ -587,6 +587,9 @@ function finishInit() {
   localStorage.setItem('diancai_room', roomId);
   localStorage.setItem('diancai_role', role);
 
+  // 请求通知权限
+  requestNotifyPermission();
+
   updateIdentityUI();
   switchRole(role, true);
   loadData();
@@ -708,6 +711,53 @@ function updateIdentityUI() {
   adminBtn.style.display = myIdentity === '管理员' ? 'flex' : 'none';
 }
 
+// ====== 系统推送通知 ======
+let firstLoad = true;
+
+function requestNotifyPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function checkNotify(newOrders, newChat) {
+  if (firstLoad) { firstLoad = false; return; }
+  // 自己没选身份时不弹
+  if (!myIdentity) return;
+
+  const dishMap = buildDishMap();
+
+  // 别人点了新菜
+  for (const [who, dishes] of Object.entries(newOrders)) {
+    if (who === myIdentity) continue;
+    const oldDishes = allOrders[who] || [];
+    const added = dishes.filter(id => !oldDishes.includes(id));
+    if (added.length > 0) {
+      const names = added.map(id => dishMap[id]?.name || id).join('、');
+      notify(`${idMap[who] || ''} ${who} 点了 ${names}`);
+    }
+  }
+
+  // 别人发了新消息
+  const oldMsgIds = new Set(chatMessages.map(m => m.id));
+  for (const msg of newChat) {
+    if (msg.from === myIdentity) continue;
+    if (!oldMsgIds.has(msg.id)) {
+      const preview = msg.text.length > 30 ? msg.text.slice(0, 30) + '…' : msg.text;
+      notify(`${idMap[msg.from] || msg.from}：${preview}`);
+    }
+  }
+}
+
+function notify(body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      const n = new Notification('🏠 回家点菜', { body, icon: 'icon.svg', tag: 'diancai-' + Date.now() });
+      setTimeout(() => n.close(), 5000);
+    } catch(e) {}
+  }
+}
+
 // ====== 工具函数 ======
 function genRoomId() {
   return 'KITCHEN'; // 默认房间号，所有设备共用
@@ -746,6 +796,9 @@ async function loadData() {
     if (!isDirty() && newOrders[myIdentity]) {
       localPicks = new Set(newOrders[myIdentity]);
     }
+
+    // 检查是否需要推送通知（对比旧状态）
+    checkNotify(newOrders, newChat);
 
     allOrders = newOrders;
     customMenu = newCustom;
