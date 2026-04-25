@@ -857,6 +857,23 @@ function checkNotify(newOrders, newChat) {
 }
 
 function notify(body) {
+  // 尝试 Capacitor 原生通知（APK 中）
+  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+    window.Capacitor.Plugins.LocalNotifications.requestPermissions().then(() => {
+      window.Capacitor.Plugins.LocalNotifications.schedule({
+        notifications: [{
+          title: '🏠 回家点菜',
+          body: body,
+          id: Date.now(),
+          schedule: { at: new Date(Date.now() + 500) },
+          smallIcon: 'ic_stat_icon_configurable',
+          iconColor: '#e8452d',
+        }]
+      });
+    }).catch(() => {});
+    return;
+  }
+  // 浏览器 Web Notification API 回退
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
       const n = new Notification('🏠 回家点菜', { body, icon: 'icon.svg', tag: 'diancai-' + Date.now() });
