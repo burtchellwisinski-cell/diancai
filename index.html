@@ -255,6 +255,34 @@ body {
   border: none; background: #ffe8e0; color: var(--red); font-size: 14px; cursor: pointer; font-weight: 700;
 }
 
+/* ====== Chat ====== */
+.chat-view { display: flex; flex-direction: column; height: calc(100vh - 200px); height: calc(100dvh - 200px); }
+.chat-msgs { flex: 1; overflow-y: auto; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+.chat-msg { display: flex; gap: 6px; max-width: 85%; animation: slideIn 0.25s ease both; }
+.chat-msg.mine { align-self: flex-end; flex-direction: row-reverse; }
+.chat-msg .msg-avatar { width: 32px; height: 32px; border-radius: 50%; background: #f5f0eb; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.chat-msg .msg-bubble { padding: 8px 12px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
+.chat-msg:not(.mine) .msg-bubble { background: white; border-top-left-radius: 4px; box-shadow: var(--shadow); }
+.chat-msg.mine .msg-bubble { background: #95ec69; border-top-right-radius: 4px; }
+.chat-msg .msg-meta { font-size: 10px; color: #b0a090; margin-top: 2px; }
+.chat-input-bar { display: flex; gap: 8px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--border); }
+.chat-input-bar input { flex: 1; padding: 10px 14px; border-radius: 20px; border: 1.5px solid var(--border); font-size: 14px; outline: none; background: white; }
+.chat-input-bar input:focus { border-color: var(--red); }
+.chat-input-bar button { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--red); color: white; font-size: 18px; cursor: pointer; flex-shrink: 0; }
+.chat-empty { text-align: center; color: #c0b0a0; padding: 40px 20px; font-size: 13px; }
+.chat-empty .big-emoji { font-size: 48px; display: block; margin-bottom: 8px; }
+
+/* ====== Admin edit order ====== */
+.admin-edit-panel { background: #fdf8f5; border-radius: 12px; padding: 12px; margin-top: 6px; }
+.admin-edit-panel .edit-dish-chip {
+  display: inline-block; padding: 4px 10px; margin: 3px; border-radius: 14px;
+  font-size: 12px; cursor: pointer; border: 1.5px solid var(--border);
+  background: white; user-select: none; transition: all 0.15s;
+}
+.admin-edit-panel .edit-dish-chip.checked { background: var(--red); color: white; border-color: var(--red); }
+.admin-edit-panel .edit-actions { margin-top: 8px; display: flex; gap: 6px; }
+.admin-edit-panel .edit-actions button { font-size: 12px; padding: 6px 14px; }
+
 /* ====== QR modal ====== */
 .qr-wrap { background: #faf7f4; border-radius: 16px; padding: 16px; display: inline-block; }
 .code-text { margin-top: 12px; font-size: 22px; font-weight: 800; letter-spacing: 3px; color: var(--red); }
@@ -292,6 +320,7 @@ body {
   <div class="role-bar">
     <button class="role-btn active" id="btnPicker" onclick="switchRole('picker')">🥢 我来点菜</button>
     <button class="role-btn" id="btnViewer" onclick="switchRole('viewer')">👀 看菜单</button>
+    <button class="role-btn" id="btnChat" onclick="switchRole('chat')">💬 聊天</button>
   </div>
 
   <!-- Picker -->
@@ -315,6 +344,17 @@ body {
     </div>
     <div class="viewer-dish-list" id="viewerDishList"></div>
     <div class="viewer-summary" id="viewerSummary" style="display:none"></div>
+  </div>
+
+  <!-- Chat -->
+  <div id="chatView" class="chat-view" style="display:none">
+    <div class="chat-msgs" id="chatMsgs">
+      <div class="chat-empty"><span class="big-emoji">💬</span>还没有消息，来发第一条吧~</div>
+    </div>
+    <div class="chat-input-bar">
+      <input id="chatInput" placeholder="说点什么..." onkeydown="if(event.key==='Enter')sendChat()">
+      <button onclick="sendChat()">➤</button>
+    </div>
   </div>
 
   <!-- Share modal -->
@@ -465,10 +505,12 @@ let role = 'picker';
 let allOrders = {};       // { 身份: [dishId, ...] }（已确认的）
 let localPicks = new Set();   // 当前未确认的选择
 let customMenu = [];      // 管理员添加的自定义菜品
+let chatMessages = [];    // 聊天消息
 let activeCategory = DEFAULT_MENU[0].id;
 let roomId = '';
 let pollTimer = null;
 let menuVersion = 0;      // 菜单版本号，变化时重新渲染
+let chatVersion = 0;
 
 // ====== 动态菜单（合并默认 + 自定义） ======
 function getMenu() {
@@ -686,7 +728,7 @@ function startPolling() {
 
 async function loadData() {
   try {
-    const res = await fetch(API + '?room_id=eq.' + roomId + '&select=dishes,custom_menu', {
+    const res = await fetch(API + '?room_id=eq.' + roomId + '&select=dishes,custom_menu,chat_messages', {
       headers: { ...HEADERS, 'Prefer': 'return=minimal' },
     });
     if (!res.ok) return;
@@ -694,9 +736,11 @@ async function loadData() {
 
     const newOrders = (data.length > 0 && data[0].dishes) ? data[0].dishes : {};
     const newCustom = (data.length > 0 && data[0].custom_menu) ? data[0].custom_menu : [];
+    const newChat = (data.length > 0 && data[0].chat_messages) ? data[0].chat_messages : [];
 
     const ordersChanged = JSON.stringify(allOrders) !== JSON.stringify(newOrders);
     const menuChanged = JSON.stringify(customMenu) !== JSON.stringify(newCustom);
+    const chatChanged = JSON.stringify(chatMessages) !== JSON.stringify(newChat);
 
     // 如果没有未确认的改动，从服务器同步当前身份的已确认选择
     if (!isDirty() && newOrders[myIdentity]) {
@@ -705,12 +749,15 @@ async function loadData() {
 
     allOrders = newOrders;
     customMenu = newCustom;
+    chatMessages = newChat;
     if (menuChanged) menuVersion++;
+    if (chatChanged) chatVersion++;
 
     if (ordersChanged || menuChanged) {
       if (role === 'picker') { renderTabs(); renderDishes(); renderBottom(); }
       renderViewer();
     }
+    if (chatChanged && role === 'chat') { renderChat(); scrollChatBottom(); }
   } catch(e) {}
 }
 
@@ -740,8 +787,10 @@ function switchRole(newRole, skipSync) {
   role = newRole;
   document.getElementById('btnPicker').classList.toggle('active', role === 'picker');
   document.getElementById('btnViewer').classList.toggle('active', role === 'viewer');
+  document.getElementById('btnChat').classList.toggle('active', role === 'chat');
   document.getElementById('pickerView').style.display = role === 'picker' ? '' : 'none';
   document.getElementById('viewerView').style.display = role === 'viewer' ? '' : 'none';
+  document.getElementById('chatView').style.display = role === 'chat' ? '' : 'none';
 
   if (role === 'picker') {
     document.getElementById('headerTitle').textContent = '回家点菜';
@@ -749,10 +798,15 @@ function switchRole(newRole, skipSync) {
     renderTabs();
     renderDishes();
     renderBottom();
-  } else {
+  } else if (role === 'viewer') {
     document.getElementById('headerTitle').textContent = '今日菜单';
     document.getElementById('headerSub').textContent = '实时更新中...';
     renderViewer();
+  } else if (role === 'chat') {
+    document.getElementById('headerTitle').textContent = '家人群聊';
+    document.getElementById('headerSub').textContent = '同一房间';
+    renderChat();
+    scrollChatBottom();
   }
 
   if (!skipSync) updateURL();
@@ -933,6 +987,79 @@ function renderViewer() {
   summaryEl.innerHTML = `共 ${allSelected.size} 道菜，辛苦啦 ❤️`;
 }
 
+// ====== 聊天 ======
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || !myIdentity) return;
+  input.value = '';
+  const msg = { id: 'c' + Date.now(), from: myIdentity, text, time: Date.now() };
+  chatMessages.push(msg);
+  syncChat();
+  renderChat();
+  scrollChatBottom();
+  showToast('已发送');
+}
+
+function renderChat() {
+  const el = document.getElementById('chatMsgs');
+  if (chatMessages.length === 0) {
+    el.innerHTML = '<div class="chat-empty"><span class="big-emoji">💬</span>还没有消息，来发第一条吧~</div>';
+    return;
+  }
+  el.innerHTML = chatMessages.map(m => {
+    const isMine = m.from === myIdentity;
+    return `<div class="chat-msg ${isMine ? 'mine' : ''}">
+      <div class="msg-avatar">${idMap[m.from] || '👤'}</div>
+      <div>
+        ${!isMine ? `<div style="font-size:11px;color:#9a8070;margin-bottom:2px">${idMap[m.from]||''}${m.from}</div>` : ''}
+        <div class="msg-bubble">${escHtml(m.text)}</div>
+        <div class="msg-meta">${fmtTime(m.time)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function scrollChatBottom() {
+  setTimeout(() => {
+    const el = document.getElementById('chatMsgs');
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 100);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+
+async function syncChat() {
+  try {
+    const check = await fetch(API + '?room_id=eq.' + roomId + '&select=dishes,custom_menu,chat_messages', {
+      headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+    });
+    const existing = await check.json();
+    const messages = (existing.length > 0 && existing[0].chat_messages) ? existing[0].chat_messages : [];
+    // 合并本地最新消息
+    const merged = [...messages, ...chatMessages.filter(m => !messages.find(e => e.id === m.id))];
+
+    if (existing.length > 0) {
+      await fetch(API + '?room_id=eq.' + roomId, {
+        method: 'PATCH', headers: HEADERS,
+        body: JSON.stringify({ chat_messages: merged.slice(-200), updated_at: new Date().toISOString() }),
+      });
+    } else {
+      await fetch(API, {
+        method: 'POST', headers: HEADERS,
+        body: JSON.stringify({ room_id: roomId, dishes: allOrders, custom_menu: customMenu, chat_messages: merged.slice(-200), updated_at: new Date().toISOString() }),
+      });
+    }
+  } catch(e) {}
+}
+
 // ====== 分享弹窗 ======
 function showShareModal() {
   const viewerUrl = new URL(window.location);
@@ -990,11 +1117,79 @@ function renderAdminOrderSummary() {
     total += ids.length;
     const names = ids.map(id => dishMap[id]?.emoji + (dishMap[id]?.name || id)).join('、');
     html += `<div style="margin-bottom:6px;background:#fff8f5;padding:8px 10px;border-radius:8px">
-      <b>${idMap[who] || ''} ${who}</b> · <span style="color:#e8452d">${ids.length}道</span>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <b>${idMap[who] || ''} ${who}</b> · <span style="color:#e8452d">${ids.length}道</span>
+        <button style="background:none;border:1.5px solid var(--border);border-radius:12px;padding:2px 10px;font-size:11px;cursor:pointer;color:var(--sub)" onclick="event.stopPropagation();openAdminEdit('${who}')">✏️ 改菜</button>
+      </div>
       <div style="font-size:12px;color:#8b6f5e;margin-top:2px">${names}</div>
+      <div class="admin-edit-panel" id="editPanel_${who}" style="display:none"></div>
     </div>`;
   }
   el.innerHTML = html + `<div style="text-align:center;margin-top:6px;font-weight:700">共 ${total} 道菜</div>`;
+}
+
+function openAdminEdit(who) {
+  const panel = document.getElementById('editPanel_' + who);
+  if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+  // 收起其他已展开的面板
+  document.querySelectorAll('.admin-edit-panel').forEach(p => p.style.display = 'none');
+
+  const dishMap = buildDishMap();
+  const currentSet = new Set(allOrders[who] || []);
+  let chips = '';
+  for (const cat of getMenu()) {
+    chips += `<div style="font-size:11px;font-weight:700;color:var(--sub);margin:4px 0 2px">${cat.icon} ${cat.name}</div>`;
+    for (const d of cat.dishes) {
+      const checked = currentSet.has(d.id);
+      chips += `<span class="edit-dish-chip ${checked?'checked':''}" id="chip_${who}_${d.id}" onclick="toggleEditChip('${who}','${d.id}')">${d.emoji} ${d.name}</span>`;
+    }
+  }
+  panel.innerHTML = chips + `
+    <div class="edit-actions">
+      <button class="btn" style="background:#e8452d;color:white" onclick="saveAdminEdit('${who}')">保存</button>
+      <button class="btn" style="background:#f5f0eb;color:#8b6f5e" onclick="document.getElementById('editPanel_${who}').style.display='none'">取消</button>
+    </div>
+  `;
+  panel.style.display = '';
+}
+
+function toggleEditChip(who, dishId) {
+  const chip = document.getElementById('chip_' + who + '_' + dishId);
+  chip.classList.toggle('checked');
+}
+
+function saveAdminEdit(who) {
+  const newIds = [];
+  document.querySelectorAll('#editPanel_' + who + ' .edit-dish-chip.checked').forEach(c => {
+    c.id.split('_').pop(); // not right, let me fix
+  });
+  // 收集所有 checked 的 dish ID
+  const panel = document.getElementById('editPanel_' + who);
+  panel.querySelectorAll('.edit-dish-chip.checked').forEach(c => {
+    // chip id format: chip_${who}_${dishId}
+    const parts = c.id.split('_');
+    newIds.push(parts.slice(2).join('_')); // handle dish IDs with underscores
+  });
+  allOrders[who] = newIds;
+  if (newIds.length === 0) delete allOrders[who];
+  // 同步到服务器
+  fetch(API + '?room_id=eq.' + roomId + '&select=dishes,custom_menu,chat_messages', {
+    headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+  }).then(r => r.json()).then(data => {
+    const merged = (data.length > 0 && data[0].dishes) ? data[0].dishes : {};
+    merged[who] = newIds;
+    if (newIds.length === 0) delete merged[who];
+    return fetch(API + '?room_id=eq.' + roomId, {
+      method: (data.length > 0 ? 'PATCH' : 'POST'), headers: HEADERS,
+      body: JSON.stringify({ room_id: roomId, dishes: merged, updated_at: new Date().toISOString() }),
+    });
+  }).then(() => {
+    panel.style.display = 'none';
+    renderAdminOrderSummary();
+    if (role === 'picker') { renderTabs(); renderDishes(); renderBottom(); }
+    renderViewer();
+    showToast(who + '的菜单已更新');
+  }).catch(() => { showToast('保存失败'); });
 }
 
 function closeAdmin(e) {

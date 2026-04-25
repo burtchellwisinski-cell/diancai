@@ -11,8 +11,9 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. 如果表已存在但没有 custom_menu 列，手动执行下面这行：
+-- 2. 如果表已存在但没有这些列，手动执行下面几行：
 -- ALTER TABLE orders ADD COLUMN IF NOT EXISTS custom_menu JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE orders ADD COLUMN IF NOT EXISTS chat_messages JSONB DEFAULT '[]'::jsonb;
 
 -- 3. 启用行级安全
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
